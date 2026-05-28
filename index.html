@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文本差异对比工具 Pro</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --border: #30363d;
+  --text: #c9d1d9;
+  --text-secondary: #8b949e;
+  --accent: #58a6ff;
+  --accent-hover: #79c0ff;
+  --add-bg: rgba(63, 185, 80, 0.15);
+  --add-border: rgba(63, 185, 80, 0.4);
+  --add-text: #7ee787;
+  --del-bg: rgba(248, 81, 73, 0.15);
+  --del-border: rgba(248, 81, 73, 0.4);
+  --del-text: #ffa198;
+  --radius: 8px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg); color: var(--text); min-height: 100vh;
+}
+header {
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 16px 24px; display: flex; align-items: center; justify-content: space-between;
+}
+header h1 { font-size: 20px; font-weight: 600; }
+header .badge { background: var(--accent); color: #000; font-size: 11px; padding: 3px 8px; border-radius: 12px; font-weight: 600; }
+.container { max-width: 1600px; margin: 0 auto; padding: 20px; }
+.toolbar {
+  display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;
+  align-items: center; padding: 10px 0;
+}
+.btn {
+  padding: 7px 14px; border: 1px solid var(--border);
+  border-radius: var(--radius); cursor: pointer; font-size: 13px;
+  background: var(--surface); color: var(--text); font-weight: 500;
+  transition: all 0.15s; display: flex; align-items: center; gap: 5px;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn-primary { background: var(--accent); color: #000; border-color: var(--accent); }
+.btn-primary:hover { background: var(--accent-hover); color: #000; }
+.btn-active { background: var(--accent); color: #000; border-color: var(--accent); }
+.view-tabs { display: flex; gap: 2px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 2px; }
+.view-tab { padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; border: none; background: transparent; color: var(--text-secondary); }
+.view-tab.active { background: var(--accent); color: #000; }
+.spacer { flex: 1; }
+.editors {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  margin-bottom: 20px;
+}
+.editor-panel {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+}
+.panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px; border-bottom: 1px solid var(--border);
+  background: var(--bg); font-size: 13px; font-weight: 600;
+}
+.panel-header .left { display: flex; align-items: center; gap: 6px; }
+.panel-header .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot-left { background: #f85149; }
+.dot-right { background: #3fb950; }
+textarea {
+  width: 100%; height: 350px; padding: 12px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px; line-height: 1.6; tab-size: 4;
+  background: var(--surface); color: var(--text);
+  border: none; resize: vertical; outline: none;
+}
+textarea::placeholder { color: var(--text-secondary); }
+.stats { font-size: 11px; color: var(--text-secondary); padding: 4px 14px 8px; }
+.results { margin-top: 8px; }
+.results-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px; border-bottom: 1px solid var(--border);
+  background: var(--bg); font-size: 13px; font-weight: 600;
+  border-radius: var(--radius) var(--radius) 0 0;
+  border: 1px solid var(--border); border-bottom: none;
+}
+.diff-container {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 0 0 var(--radius) var(--radius);
+  max-height: 600px; overflow: auto; font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px; line-height: 1.6;
+}
+/* Side-by-side mode */
+.diff-sbs { display: grid; grid-template-columns: 1fr 1fr; }
+.diff-sbs .col-header {
+  background: var(--bg); padding: 6px 12px; font-size: 11px;
+  color: var(--text-secondary); font-weight: 600; border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+.diff-line {
+  display: contents;
+}
+.diff-line .ln { text-align: right; padding: 1px 8px; color: var(--text-secondary); font-size: 11px; user-select: none; min-width: 40px; border-right: 1px solid var(--border); }
+.diff-line .code { padding: 1px 8px; white-space: pre-wrap; word-break: break-all; }
+.diff-line .ln-del { background: var(--del-bg); border-right-color: var(--del-border); color: var(--del-text); }
+.diff-line .code-del { background: var(--del-bg); border-left: 3px solid var(--del-border); }
+.diff-line .ln-add { background: var(--add-bg); border-right-color: var(--add-border); color: var(--add-text); }
+.diff-line .code-add { background: var(--add-bg); border-left: 3px solid var(--add-border); }
+.diff-line .ln-empty { background: var(--surface); border-right-color: var(--border); }
+.diff-line .code-empty { background: var(--surface); }
+
+/* Unified mode */
+.diff-unified .diff-row {
+  display: flex; border-bottom: 1px solid rgba(48,54,61,0.5);
+}
+.diff-unified .diff-row.del { background: var(--del-bg); }
+.diff-unified .diff-row.add { background: var(--add-bg); }
+.diff-unified .diff-row .marker { width: 20px; text-align: center; flex-shrink: 0; padding: 1px 4px; font-weight: bold; }
+.diff-unified .diff-row.del .marker { color: var(--del-text); }
+.diff-unified .diff-row.add .marker { color: var(--add-text); }
+.diff-unified .diff-row .ln-old, .diff-unified .diff-row .ln-new {
+  width: 50px; text-align: right; padding: 1px 6px; color: var(--text-secondary);
+  font-size: 11px; user-select: none; flex-shrink: 0;
+}
+.diff-unified .diff-row .code { padding: 1px 8px; white-space: pre-wrap; word-break: break-all; flex: 1; }
+
+.no-diff {
+  padding: 40px; text-align: center; color: var(--text-secondary);
+  font-size: 14px;
+}
+
+@media (max-width: 900px) {
+  .editors { grid-template-columns: 1fr; }
+  .diff-sbs { grid-template-columns: 1fr; }
+  .diff-sbs .col-header:nth-child(2) { display: none; }
+}
+
+/* Word-level diff highlight */
+.wl-add { background: rgba(63,185,80,0.35); border-radius: 2px; }
+.wl-del { background: rgba(248,81,73,0.35); border-radius: 2px; text-decoration: line-through; }
+</style>
+</head>
+<body>
+<header>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span style="font-size:24px;">🔍</span>
+    <h1>文本差异对比工具 Pro</h1>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <span class="badge">Pro</span>
+    <span style="font-size:12px;color:var(--text-secondary)">v1.0</span>
+  </div>
+</header>
+
+<div class="container">
+  <div class="toolbar">
+    <div class="view-tabs">
+      <button class="view-tab active" onclick="setView('sbs')">📋 双栏对比</button>
+      <button class="view-tab" onclick="setView('unified')">📄 统一视图</button>
+    </div>
+    <span class="spacer"></span>
+    <button class="btn btn-primary" onclick="compare()">⚡ 开始对比</button>
+    <button class="btn" onclick="exportDiff()">📥 导出</button>
+    <button class="btn" onclick="swapTexts()">🔄 交换</button>
+    <button class="btn" onclick="clearAll()">🗑️ 清空</button>
+    <button class="btn" onclick="loadSample()">🎲 示例</button>
+  </div>
+
+  <div class="editors">
+    <div class="editor-panel">
+      <div class="panel-header">
+        <span class="left"><span class="dot dot-left"></span> 原始文本</span>
+        <span style="font-size:11px;color:var(--text-secondary);">A</span>
+      </div>
+      <textarea id="textA" placeholder="在此粘贴原始文本...&#10;&#10;示例:&#10;def hello():&#10;    print('Hello')&#10;    return True&#10;&#10;def goodbye():&#10;    print('Bye')&#10;    return False"></textarea>
+      <div class="stats" id="statsA">0 行 · 0 字符</div>
+    </div>
+    <div class="editor-panel">
+      <div class="panel-header">
+        <span class="left"><span class="dot dot-right"></span> 修改文本</span>
+        <span style="font-size:11px;color:var(--text-secondary);">B</span>
+      </div>
+      <textarea id="textB" placeholder="在此粘贴修改后的文本...&#10;&#10;示例:&#10;def hello():&#10;    print('Hello World')&#10;    return True&#10;&#10;def farewell():&#10;    print('Goodbye')&#10;    return False"></textarea>
+      <div class="stats" id="statsB">0 行 · 0 字符</div>
+    </div>
+  </div>
+
+  <div class="results" id="results">
+    <div class="results-header">
+      <span>📊 对比结果</span>
+      <span id="diffStats" style="font-size:12px;color:var(--text-secondary);"></span>
+    </div>
+    <div class="diff-container" id="diffOutput"></div>
+  </div>
+</div>
+
+<script>
+let currentView = 'sbs';
+let lastDiffResult = null;
+
+// ===== Myers Diff Algorithm =====
+function myersDiff(a, b) {
+  const n = a.length, m = b.length;
+  const max = n + m;
+  const v = new Array(2 * max + 1);
+  const trace = [];
+  
+  v[max + 1] = 0;
+  
+  for (let d = 0; d <= max; d++) {
+    const snapshot = [...v];
+    trace.push(snapshot);
+    
+    for (let k = -d; k <= d; k += 2) {
+      const idx = max + k;
+      let x;
+      if (k === -d || (k !== d && v[idx - 1] < v[idx + 1])) {
+        x = v[idx + 1];
+      } else {
+        x = v[idx - 1] + 1;
+      }
+      let y = x - k;
+      
+      while (x < n && y < m && a[x] === b[y]) {
+        x++; y++;
+      }
+      
+      v[idx] = x;
+      
+      if (x >= n && y >= m) {
+        return backtrack(trace, a, b, d, max, n);
+      }
+    }
+  }
+  return [];
+}
+
+function backtrack(trace, a, b, d, max, n) {
+  const edits = [];
+  let x = a.length, y = b.length;
+  
+  for (let di = d; di >= 0; di--) {
+    const v = trace[di];
+    const k = x - y;
+    const idx = max + k;
+    
+    let prevX;
+    if (k === -di || (k !== di && v[idx - 1] < v[idx + 1])) {
+      prevX = v[idx + 1];
+    } else {
+      prevX = v[idx - 1] + 1;
+    }
+    let prevY = prevX - (k + (prevX === v[idx + 1] ? 1 : -1));
+    
+    while (x > prevX && y > prevY) {
+      x--; y--;
+      edits.unshift({ type: 'equal', oldLine: a[x], newLine: b[y], oldIdx: x + 1, newIdx: y + 1 });
+    }
+    
+    if (di > 0) {
+      if (x === prevX) {
+        y--;
+        edits.unshift({ type: 'add', oldLine: null, newLine: b[y], oldIdx: null, newIdx: y + 1 });
+      } else {
+        x--;
+        edits.unshift({ type: 'del', oldLine: a[x], newLine: null, oldIdx: x + 1, newIdx: null });
+      }
+    }
+  }
+  return edits;
+}
+
+// ===== Word-level diff for inline highlighting =====
+function wordDiff(oldLine, newLine) {
+  if (!oldLine || !newLine) return { oldHtml: oldLine || '', newHtml: newLine || '' };
+  
+  const oldWords = oldLine.split(/(\s+)/);
+  const newWords = newLine.split(/(\s+)/);
+  
+  // Simple greedy LCS for word-level
+  const m = oldWords.length, n = newWords.length;
+  const dp = Array.from({length: m + 1}, () => new Array(n + 1).fill(0));
+  
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (oldWords[i - 1] === newWords[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+  
+  // Backtrack
+  const oldResult = [], newResult = [];
+  let i = m, j = n;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldWords[i - 1] === newWords[j - 1]) {
+      oldResult.unshift(escHtml(oldWords[i - 1]));
+      newResult.unshift(escHtml(newWords[j - 1]));
+      i--; j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      newResult.unshift('<span class="wl-add">' + escHtml(newWords[j - 1]) + '</span>');
+      j--;
+    } else {
+      oldResult.unshift('<span class="wl-del">' + escHtml(oldWords[i - 1]) + '</span>');
+      i--;
+    }
+  }
+  
+  return {
+    oldHtml: oldResult.join(''),
+    newHtml: newResult.join('')
+  };
+}
+
+function escHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ===== Compare =====
+function compare() {
+  const textA = document.getElementById('textA').value;
+  const textB = document.getElementById('textB').value;
+  
+  const linesA = textA === '' ? [] : textA.split('\n');
+  const linesB = textB === '' ? [] : textB.split('\n');
+  
+  const edits = myersDiff(linesA, linesB);
+  lastDiffResult = { edits, linesA, linesB };
+  
+  renderDiff(edits);
+  updateDiffStats(edits);
+}
+
+function renderDiff(edits) {
+  const container = document.getElementById('diffOutput');
+  
+  if (edits.length === 0) {
+    container.innerHTML = '<div class="no-diff">✅ 两个文本完全相同，没有差异</div>';
+    return;
+  }
+  
+  if (currentView === 'sbs') {
+    // Group into hunks for side-by-side
+    const hunkSize = 3;
+    const groups = [];
+    let group = [];
+    let eqCount = 0;
+    
+    for (const e of edits) {
+      if (e.type === 'equal') {
+        if (eqCount < hunkSize) {
+          group.push(e); eqCount++;
+        } else {
+          if (group.length > 0) groups.push(group);
+          group = [e];
+          eqCount = 1;
+        }
+      } else {
+        group.push(e);
+        eqCount = 0;
+      }
+    }
+    if (group.length > 0) groups.push(group);
+    
+    let html = '<div class="diff-sbs"><div class="col-header">— 原始文本 (A)</div><div class="col-header">+ 修改文本 (B)</div>';
+    
+    for (const g of groups) {
+      for (const e of g) {
+        if (e.type === 'equal') {
+          html += `<div class="diff-line">
+            <div class="ln">${e.oldIdx}</div><div class="code">${escHtml(e.oldLine || '')}</div>
+            <div class="ln">${e.newIdx}</div><div class="code">${escHtml(e.newLine || '')}</div>
+          </div>`;
+        } else if (e.type === 'del') {
+          const wd = wordDiff(e.oldLine, '');
+          html += `<div class="diff-line">
+            <div class="ln ln-del">${e.oldIdx}</div><div class="code code-del">${wd.oldHtml || '&nbsp;'}</div>
+            <div class="ln ln-empty"></div><div class="code code-empty"></div>
+          </div>`;
+        } else if (e.type === 'add') {
+          const wd = wordDiff('', e.newLine);
+          html += `<div class="diff-line">
+            <div class="ln ln-empty"></div><div class="code code-empty"></div>
+            <div class="ln ln-add">${e.newIdx}</div><div class="code code-add">${wd.newHtml || '&nbsp;'}</div>
+          </div>`;
+        }
+      }
+      html += '<div class="diff-line"><div class="code" style="grid-column:1/-1;border-top:1px solid var(--border);height:8px;"></div></div>';
+    }
+    
+    html += '</div>';
+    container.innerHTML = html;
+  } else {
+    // Unified view
+    let html = '<div class="diff-unified">';
+    let oldLineNum = 0, newLineNum = 0;
+    
+    for (const e of edits) {
+      if (e.type === 'equal') {
+        oldLineNum = e.oldIdx; newLineNum = e.newIdx;
+        html += `<div class="diff-row">
+          <span class="marker"> </span>
+          <span class="ln-old">${e.oldIdx}</span>
+          <span class="ln-new">${e.newIdx}</span>
+          <span class="code">${escHtml(e.oldLine || '')}</span>
+        </div>`;
+      } else if (e.type === 'del') {
+        oldLineNum = e.oldIdx;
+        html += `<div class="diff-row del">
+          <span class="marker">-</span>
+          <span class="ln-old">${e.oldIdx}</span>
+          <span class="ln-new"></span>
+          <span class="code">${escHtml(e.oldLine || '')}</span>
+        </div>`;
+      } else if (e.type === 'add') {
+        newLineNum = e.newIdx;
+        html += `<div class="diff-row add">
+          <span class="marker">+</span>
+          <span class="ln-old"></span>
+          <span class="ln-new">${e.newIdx}</span>
+          <span class="code">${escHtml(e.newLine || '')}</span>
+        </div>`;
+      }
+    }
+    
+    html += '</div>';
+    container.innerHTML = html;
+  }
+}
+
+function updateDiffStats(edits) {
+  let adds = 0, dels = 0, mods = 0;
+  for (const e of edits) {
+    if (e.type === 'add') adds++;
+    else if (e.type === 'del') dels++;
+  }
+  document.getElementById('diffStats').innerHTML = 
+    `<span style="color:var(--add-text)">+${adds} 添加</span> · ` +
+    `<span style="color:var(--del-text)">-${dels} 删除</span>`;
+}
+
+// ===== View =====
+function setView(view) {
+  currentView = view;
+  document.querySelectorAll('.view-tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  if (lastDiffResult) renderDiff(lastDiffResult.edits);
+}
+
+// ===== Export =====
+function exportDiff() {
+  if (!lastDiffResult) return;
+  const { edits } = lastDiffResult;
+  
+  let text = '文本差异对比结果\n' + '='.repeat(40) + '\n\n';
+  
+  for (const e of edits) {
+    if (e.type === 'equal') {
+      text += `  ${e.oldLine}\n`;
+    } else if (e.type === 'del') {
+      text += `- ${e.oldLine}\n`;
+    } else if (e.type === 'add') {
+      text += `+ ${e.newLine}\n`;
+    }
+  }
+  
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'diff-report.txt';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ===== Utilities =====
+function swapTexts() {
+  const a = document.getElementById('textA');
+  const b = document.getElementById('textB');
+  const temp = a.value;
+  a.value = b.value;
+  b.value = temp;
+  updateStats();
+  compare();
+}
+
+function clearAll() {
+  document.getElementById('textA').value = '';
+  document.getElementById('textB').value = '';
+  document.getElementById('diffOutput').innerHTML = '<div class="no-diff">输入两个文本后点击「开始对比」查看差异</div>';
+  document.getElementById('diffStats').textContent = '';
+  lastDiffResult = null;
+  updateStats();
+}
+
+function loadSample() {
+  document.getElementById('textA').value = `# 用户管理系统 API 文档
+
+## 获取用户列表
+- GET /api/v1/users
+- 参数: page, limit, sort
+
+## 创建用户
+- POST /api/v1/users
+- Body: {name, email, role}
+
+## 权限
+- admin: 全部权限
+- user: 只读
+- guest: 仅查看公开数据
+
+## 错误码
+- 400: 请求参数错误
+- 401: 未授权
+- 403: 无权限
+- 500: 服务器错误`;
+
+  document.getElementById('textB').value = `# 用户管理系统 API 文档 v2
+
+## 获取用户列表
+- GET /api/v2/users
+- 参数: page, limit, sort, filter
+
+## 创建用户
+- POST /api/v2/users
+- Body: {name, email, role, department}
+
+## 更新用户
+- PUT /api/v2/users/:id
+- Body: {name, email, role, department}
+
+## 权限
+- admin: 全部权限
+- user: 读写自己数据
+- guest: 仅查看公开数据
+
+## 错误码
+- 400: 请求参数错误
+- 401: 未授权
+- 403: 无权限
+- 404: 资源不存在
+- 500: 服务器错误`;
+
+  updateStats();
+  compare();
+}
+
+function updateStats() {
+  const atxt = document.getElementById('textA').value;
+  const btxt = document.getElementById('textB').value;
+  document.getElementById('statsA').textContent = 
+    (atxt ? atxt.split('\n').length : 0) + ' 行 · ' + atxt.length.toLocaleString() + ' 字符';
+  document.getElementById('statsB').textContent = 
+    (btxt ? btxt.split('\n').length : 0) + ' 行 · ' + btxt.length.toLocaleString() + ' 字符';
+}
+
+// ===== Init =====
+document.getElementById('textA').addEventListener('input', updateStats);
+document.getElementById('textB').addEventListener('input', updateStats);
+</script>
+</body>
+</html>
